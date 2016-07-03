@@ -13,6 +13,9 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.util.ArrayList;
+import java.util.Iterator;
+import java.util.List;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import javax.swing.JFileChooser;
@@ -25,8 +28,8 @@ import org.apache.poi.openxml4j.exceptions.InvalidFormatException;
 import org.apache.poi.openxml4j.exceptions.OpenXML4JException;
 import org.apache.poi.openxml4j.opc.PackagePart;
 import org.apache.poi.poifs.filesystem.POIFSFileSystem;
-import org.apache.poi.sl.usermodel.Sheet;
-import org.apache.poi.xssf.usermodel.XSSFSheet;
+import org.apache.poi.ss.usermodel.Sheet;
+import org.apache.poi.ss.usermodel.Workbook;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.apache.tika.io.TikaInputStream;
 import org.codehaus.plexus.util.IOUtil;
@@ -217,25 +220,35 @@ public class MainWindowUI extends javax.swing.JFrame {
                     String extension = filename.substring(filename.lastIndexOf(".") + 1, filename.length());
                     
                     //There mus be only one Excel file per folder
-                    int[] sheetsToCheck = {0,7};    //Sheets with documents required
+                    List<String> sheetsToCheck = new ArrayList<String>(){{ //Sheets with documents required
+                                                    add("1. Supplier Basic Info");
+                                                    add("5. Kosher Declaration");
+                                                }};
+
                     if(extension.equalsIgnoreCase("xlsx") || extension.equalsIgnoreCase("xlsm")){
                         try {
                             //Initialize excel file as POI Object
-                            XSSFWorkbook workbook = new XSSFWorkbook(file);
-                            for(int sheetNumber: sheetsToCheck){
-                                XSSFSheet curSheet = workbook.getSheetAt(sheetNumber);
-                                
-                            }
-                                                     
+                            Workbook workbook = new XSSFWorkbook(file);
+                            Iterator<Sheet> sheetIt = workbook.iterator();
                             
-                            XSSFSheet sheet2 = workbook.getSheetAt(1);
-                            XSSFSheet sheet3 = workbook.getSheetAt(2);
-                            XSSFSheet sheet4 = workbook.getSheetAt(3);
-                            XSSFSheet sheet5 = workbook.getSheetAt(5);
-                            System.out.println(sheet2.getRelations().toString());
-                            System.out.println(sheet3.getRelations().toString());
-                            System.out.println(sheet4.getRelations().toString());
-                            System.out.println(sheet5.getRelations().toString());
+                            //Check the sheets shearching for OLE bjects
+                            while(sheetIt.hasNext()){
+                                Sheet curSheet = sheetIt.next();
+                                switch( curSheet.getSheetName() ){
+                                    case "1. Supplier Basic Info":
+                                        appendTextToPane(0, "Processing sheet ... "+curSheet.getSheetName());
+                                        processBasicInfoSheet(workbook ,curSheet);
+                                        break;
+                                    case "5. Kosher Declaration":
+                                        break;
+                                    default:
+                                        break;
+                                }
+                            }
+                            
+                            //XSSFSheet sheet2 = workbook.getSheetAt(1);
+                            //System.out.println(sheet2.getRelations().toString());
+
                             /*FileInputStream inStream = null;
                             try {
                             inStream = new FileInputStream(file);
@@ -271,7 +284,7 @@ public class MainWindowUI extends javax.swing.JFrame {
                             }
                             }*/
                             break;
-                        } catch (IOException | InvalidFormatException ex) {
+                        } catch (IOException | InvalidFormatException | BadLocationException ex) {
                             Logger.getLogger(MainWindowUI.class.getName()).log(Level.SEVERE, null, ex);
                         }
                     }
@@ -312,6 +325,12 @@ public class MainWindowUI extends javax.swing.JFrame {
                 doc.insertString(doc.getLength(), text, set);
                 break;
         }
+    }
+    
+    //Process sheet - 1. Supplier Basic Info
+    private void processBasicInfoSheet(Workbook workbook,Sheet sheet){
+        //Information starts on row 12 : col B
+        
     }
     
     /**

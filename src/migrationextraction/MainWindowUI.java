@@ -24,12 +24,17 @@ import javax.swing.text.BadLocationException;
 import javax.swing.text.Document;
 import javax.swing.text.SimpleAttributeSet;
 import javax.swing.text.StyleConstants;
+import org.apache.poi.POIXMLDocumentPart;
+import org.apache.poi.POIXMLDocumentPart.RelationPart;
 import org.apache.poi.openxml4j.exceptions.InvalidFormatException;
 import org.apache.poi.openxml4j.exceptions.OpenXML4JException;
 import org.apache.poi.openxml4j.opc.PackagePart;
+import org.apache.poi.openxml4j.opc.PackageRelationship;
+import org.apache.poi.openxml4j.opc.PackageRelationshipCollection;
 import org.apache.poi.poifs.filesystem.POIFSFileSystem;
 import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.ss.usermodel.Workbook;
+import org.apache.poi.xssf.usermodel.XSSFSheet;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.apache.tika.io.TikaInputStream;
 import org.codehaus.plexus.util.IOUtil;
@@ -219,72 +224,25 @@ public class MainWindowUI extends javax.swing.JFrame {
                     String filename = file.getName();
                     String extension = filename.substring(filename.lastIndexOf(".") + 1, filename.length());
                     
-                    //There mus be only one Excel file per folder
-                    List<String> sheetsToCheck = new ArrayList<String>(){{ //Sheets with documents required
+                    
+                    /*List<String> sheetsToCheck = new ArrayList<String>(){{ //Sheets with documents required
                                                     add("1. Supplier Basic Info");
+                                                    add("6. Test Data");
                                                     add("5. Kosher Declaration");
-                                                }};
-
+                                                }};*/
+                    //There must be only one Excel file per folder                            
                     if(extension.equalsIgnoreCase("xlsx") || extension.equalsIgnoreCase("xlsm")){
                         try {
                             //Initialize excel file as POI Object
-                            Workbook workbook = new XSSFWorkbook(file);
-                            Iterator<Sheet> sheetIt = workbook.iterator();
+                            Workbook wb = new XSSFWorkbook(file);
                             
-                            //Check the sheets shearching for OLE bjects
-                            while(sheetIt.hasNext()){
-                                Sheet curSheet = sheetIt.next();
-                                switch( curSheet.getSheetName() ){
-                                    case "1. Supplier Basic Info":
-                                        appendTextToPane(0, "Processing sheet ... "+curSheet.getSheetName());
-                                        processBasicInfoSheet(workbook ,curSheet);
-                                        break;
-                                    case "5. Kosher Declaration":
-                                        break;
-                                    default:
-                                        break;
-                                }
-                            }
+                            //Sheet 1
+                            processBasicInfoSheet((XSSFWorkbook)wb);
                             
-                            //XSSFSheet sheet2 = workbook.getSheetAt(1);
-                            //System.out.println(sheet2.getRelations().toString());
-
-                            /*FileInputStream inStream = null;
-                            try {
-                            inStream = new FileInputStream(file);
-                            XSSFWorkbook workbook = new XSSFWorkbook(inStream);
-                            int i =0;
-                            for (PackagePart pPart : workbook.getAllEmbedds()) {
-                            System.out.println(pPart.getRelationships().toString());
-                            String contentType = pPart.getContentType();
-                            if (contentType.equals("application/vnd.openxmlformats-officedocument.oleObject")){
-                            POIFSFileSystem fs = new POIFSFileSystem(pPart.getInputStream());
-                            TikaInputStream stream =  TikaInputStream.get(fs.createDocumentInputStream("CONTENTS"));
-                            
-                            byte[] bytes = IOUtil.toByteArray(stream);
-                            stream.close();
-                            OutputStream outStream = new FileOutputStream(new File(ROOT_DIRECTORY.getAbsolutePath()+"\\PDF"+i+".pdf"));
-                            IOUtil.copy(bytes, outStream);
-                            outStream.close();
-                            }
-                            i++;
-                            }
-                            
-                            } catch (FileNotFoundException ex) {
+                            break;  //End for cycle as excel file has been found
+                        } catch (IOException ex) {
                             Logger.getLogger(MainWindowUI.class.getName()).log(Level.SEVERE, null, ex);
-                            } catch (IOException ex) {
-                            Logger.getLogger(MainWindowUI.class.getName()).log(Level.SEVERE, null, ex);
-                            } catch (OpenXML4JException ex) {
-                            Logger.getLogger(MainWindowUI.class.getName()).log(Level.SEVERE, null, ex);
-                            } finally {
-                            try {
-                            inStream.close();
-                            } catch (IOException ex) {
-                            Logger.getLogger(MainWindowUI.class.getName()).log(Level.SEVERE, null, ex);
-                            }
-                            }*/
-                            break;
-                        } catch (IOException | InvalidFormatException | BadLocationException ex) {
+                        } catch (InvalidFormatException ex) {
                             Logger.getLogger(MainWindowUI.class.getName()).log(Level.SEVERE, null, ex);
                         }
                     }
@@ -328,9 +286,27 @@ public class MainWindowUI extends javax.swing.JFrame {
     }
     
     //Process sheet - 1. Supplier Basic Info
-    private void processBasicInfoSheet(Workbook workbook,Sheet sheet){
-        //Information starts on row 12 : col B
-        
+    private void processBasicInfoSheet(XSSFWorkbook wb) throws InvalidFormatException{
+        try {
+            XSSFSheet sheet = wb.getSheet("1. Supplier Basic Info");
+            PackageRelationshipCollection oleRels =
+                    sheet.getPackagePart().getRelationshipsByType("http://schemas.openxmlformats.org/officeDocument/2006/relationships/oleObject");
+            Iterator<PackageRelationship> relIterator = oleRels.iterator();
+            while(relIterator.hasNext()){
+                System.out.println(relIterator.next());
+            }
+            
+            for(PackagePart pp: wb.getAllEmbedds()){
+                String contentType = pp.getContentType();
+                //PackageRelationshipCollection listpp = pp.getRelationships();
+                if (contentType.equals("application/vnd.openxmlformats-officedocument.oleObject")){
+                    POIFSFileSystem fs = new POIFSFileSystem(pp.getInputStream());
+                    TikaInputStream stream =  TikaInputStream.get(fs.createDocumentInputStream("CONTENTS"));
+                }
+            }
+        } catch (OpenXML4JException | IOException ex) {
+            Logger.getLogger(MainWindowUI.class.getName()).log(Level.SEVERE, null, ex);
+        } 
     }
     
     /**

@@ -5,15 +5,13 @@
  */
 package migrationextraction;
 
+import auxiliar.OleObject;
 import java.awt.Color;
 import java.io.File;
-import java.io.FileInputStream;
-import java.io.FileNotFoundException;
-import java.io.FileOutputStream;
 import java.io.IOException;
-import java.io.InputStream;
-import java.io.OutputStream;
+import java.io.StringReader;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Iterator;
 import java.util.List;
 import java.util.logging.Level;
@@ -24,20 +22,16 @@ import javax.swing.text.BadLocationException;
 import javax.swing.text.Document;
 import javax.swing.text.SimpleAttributeSet;
 import javax.swing.text.StyleConstants;
-import org.apache.poi.POIXMLDocumentPart;
-import org.apache.poi.POIXMLDocumentPart.RelationPart;
+import javax.xml.parsers.ParserConfigurationException;
 import org.apache.poi.openxml4j.exceptions.InvalidFormatException;
-import org.apache.poi.openxml4j.exceptions.OpenXML4JException;
-import org.apache.poi.openxml4j.opc.PackagePart;
-import org.apache.poi.openxml4j.opc.PackageRelationship;
-import org.apache.poi.openxml4j.opc.PackageRelationshipCollection;
-import org.apache.poi.poifs.filesystem.POIFSFileSystem;
-import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.ss.usermodel.Workbook;
 import org.apache.poi.xssf.usermodel.XSSFSheet;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
-import org.apache.tika.io.TikaInputStream;
-import org.codehaus.plexus.util.IOUtil;
+import org.jdom2.Content;
+import org.jdom2.Element;
+import org.jdom2.JDOMException;
+import org.jdom2.input.SAXBuilder;
+import org.openxmlformats.schemas.spreadsheetml.x2006.main.CTWorksheet;
 
 /**
  *
@@ -240,9 +234,7 @@ public class MainWindowUI extends javax.swing.JFrame {
                             processBasicInfoSheet((XSSFWorkbook)wb);
                             
                             break;  //End for cycle as excel file has been found
-                        } catch (IOException ex) {
-                            Logger.getLogger(MainWindowUI.class.getName()).log(Level.SEVERE, null, ex);
-                        } catch (InvalidFormatException ex) {
+                        } catch (IOException | InvalidFormatException ex) {
                             Logger.getLogger(MainWindowUI.class.getName()).log(Level.SEVERE, null, ex);
                         }
                     }
@@ -286,29 +278,53 @@ public class MainWindowUI extends javax.swing.JFrame {
     }
     
     //Process sheet - 1. Supplier Basic Info
-    private void processBasicInfoSheet(XSSFWorkbook wb) throws InvalidFormatException{
+    private void processBasicInfoSheet(XSSFWorkbook wb) 
+            throws InvalidFormatException{
         try {
             XSSFSheet sheet = wb.getSheet("1. Supplier Basic Info");
-            PackageRelationshipCollection oleRels =
-                    sheet.getPackagePart().getRelationshipsByType("http://schemas.openxmlformats.org/officeDocument/2006/relationships/oleObject");
-            Iterator<PackageRelationship> relIterator = oleRels.iterator();
-            while(relIterator.hasNext()){
-                System.out.println(relIterator.next());
-            }
+            CTWorksheet ctws = sheet.getCTWorksheet();
+            /*String xml10pattern = "[^"
+                    + "\u0009\r\n"
+                    + "\u0020-\uD7FF"
+                    + "\uE000-\uFFFD"
+                    + "\ud800\udc00-\udbff\udfff"
+                    + "]";
+            String xml = ctws.toString().replaceAll(xml10pattern, "");*/
+            //Get embedded objects positions.
+            SAXBuilder saxB = new SAXBuilder();
+            org.jdom2.Document doc = saxB.build(new StringReader(ctws.toString()));
             
-            for(PackagePart pp: wb.getAllEmbedds()){
-                String contentType = pp.getContentType();
-                //PackageRelationshipCollection listpp = pp.getRelationships();
-                if (contentType.equals("application/vnd.openxmlformats-officedocument.oleObject")){
-                    POIFSFileSystem fs = new POIFSFileSystem(pp.getInputStream());
-                    TikaInputStream stream =  TikaInputStream.get(fs.createDocumentInputStream("CONTENTS"));
+            List<OleObject> oleObjects = new ArrayList<>();
+            List<Element> elements = doc.getRootElement().getChildren();
+            elements.stream().forEach((element)->{
+                if(element.getName().equals("oleObjects")){
+                    element.getChildren();
+                    getXMLUntilOle(element.getContent(), 0);
+                    //Get content
+                    System.out.println("");
+                    //for(Content content:element.getContent())
                 }
-            }
-        } catch (OpenXML4JException | IOException ex) {
+            });
+        }  catch (JDOMException | IOException ex ) {
             Logger.getLogger(MainWindowUI.class.getName()).log(Level.SEVERE, null, ex);
-        } 
+        }            
     }
     
+    private OleObject getXMLUntilOle(List<Content> contentList, int nextLvl){
+        List<String> contentPath = Arrays.asList("AlternateContent",
+                                        "Choice","oleObject","objectPr","anchor");
+        for (Iterator<Content> it = contentList.iterator(); it.hasNext();) {
+            Content content = it.next();
+            if( nextLvl < contentPath.size()-1 &&
+                    content.getCType().toString().equals("Element") && 
+                    ((Element)content).getName().equals(contentPath.get(nextLvl))){
+                    getXMLUntilOle(((Element)content).getContent(),nextLvl++ );
+            }
+            System.out.println(content);
+        }
+        
+        return null;
+    }
     /**
      * @param args the command line arguments
      */
